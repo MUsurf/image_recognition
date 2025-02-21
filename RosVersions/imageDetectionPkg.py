@@ -2,6 +2,7 @@ import cv2 as cv
 import numpy as np
 import rclpy 
 from rclpy.node import Node
+from std_msgs.msg import Float64
 if __debug__:
     from compass import *
 
@@ -20,6 +21,8 @@ cap = cv.VideoCapture(0)
 class imageDetectionPkg(Node): 
     def __init__(self):
         super().__init__('image_detection_node')
+        #create the publisher stuff so that it returns a float representing an angle
+        self.publisher_= self.create_publisher(Float64, 'angle', 10)
         self.get_logger().info('image detection node has been started')
     
     
@@ -89,43 +92,46 @@ class imageDetectionPkg(Node):
                     m = min(max(m, -25), 25)
 
 
-                    if __debug__:
-                        angle = calculate_angle(vx, vy)
-                        draw_compass(angle)
+                    #get the angle and convert to a ros2 compatible message
+                    angle = calculate_angle(vx, vy)
+                    msg = Float64()
+                    msg.data = angle
+                    self.publisher_.publish(msg)
 
-                    # Calculate left and right end points of line
-                    lefty = int((-x*m) + y)
-                    righty = int(((cols-x)*m)+y)
 
-                    # Ensure lefty & righty are ints
-                    #   Should not be needed
-                    lefty = lefty if isinstance(lefty, int) else 1
-                    righty = righty if isinstance(righty, int) else 1
+                    # # Calculate left and right end points of line
+                    # lefty = int((-x*m) + y)
+                    # righty = int(((cols-x)*m)+y)
 
-                    # Ensure sides are within normal bounds
-                    lefty = max(lefty, -camera_width)
-                    lefty = min(lefty, camera_width)
-                    righty = max(righty, -camera_width)
-                    righty = min(righty, camera_width)
+                    # # Ensure lefty & righty are ints
+                    # #   Should not be needed
+                    # lefty = lefty if isinstance(lefty, int) else 1
+                    # righty = righty if isinstance(righty, int) else 1
 
-                    # * I do not know again
-                    colMin1 = cols-1 or 0
-                    colMin1 = colMin1 if isinstance(colMin1, int) else 1
+                    # # Ensure sides are within normal bounds
+                    # lefty = max(lefty, -camera_width)
+                    # lefty = min(lefty, camera_width)
+                    # righty = max(righty, -camera_width)
+                    # righty = min(righty, camera_width)
 
-                    print()
+                    # # * I do not know again
+                    # colMin1 = cols-1 or 0
+                    # colMin1 = colMin1 if isinstance(colMin1, int) else 1
+
+                    # print()
 
                     # Actually draw the line
-                    cv.line(frame,(colMin1,righty),(0,lefty),(0,255,0),2)
+                    # cv.line(frame,(colMin1,righty),(0,lefty),(0,255,0),2)
 
                     # return ((colMin1, righty), (0, lefty))
 
                 # Show the edits
-                cv.imshow('Contours', frame)
-                cv.imshow('Mask', mask)
-                cv.imshow('Smoothed', mask_smoothed)
+                # cv.imshow('Contours', frame)
+                # cv.imshow('Mask', mask)
+                # cv.imshow('Smoothed', mask_smoothed)
                 
             # Exit
-            cv.destroyAllWindows()
+            # cv.destroyAllWindows()
             cap.release()
 
 
