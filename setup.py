@@ -21,8 +21,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-#		'line_detector = image_recognition.image-detection-script:main',
-		'line_detector = image_recognition.happy:main',
+		'line_detector = image_recognition.image_detection_script:main',
+		# 'line_detector = image_recognition.happy:main',
         ],
     },
 )
