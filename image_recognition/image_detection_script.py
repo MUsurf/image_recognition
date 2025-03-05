@@ -1,141 +1,86 @@
 import cv2 as cv
 import numpy as np
-import rclpy 
+import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64
-#if __debug__:
-#    from compass import *
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
 
 # Script to get a direction from a orange oblong
 # Uses opencv to process the image and get a "direction"
 # Currently only supports a single direction averaging the oblong
-
-# Adds a pygame compass to indicate direction if ran `python -O orange_oblong_detection.py`
 
 # TODO: Support multi segment oblong.
 
 # Get capture from camera
 cap = cv.VideoCapture(0)
 
-#set up node stuff
+# Set up node stuff
 class imageDetectionPkg(Node): 
     def __init__(self):
         super().__init__('image_detection_node')
-        #create the publisher stuff so that it returns a float representing an angle
+
+        # Create a publisher for the detected angle
         self.publisher_= self.create_publisher(Float64, 'angle', 10)
+
+        # Create a subscriber to the image topic
+        self.subscription = self.create_subscription(
+            Image, 'image_topic', self.imageDetection, 10)
+
+        # Initialize CvBridge for image conversion
+        self.bridge = CvBridge()
+
         self.get_logger().info('image detection node has been started')
 
-    def imageDetection(self):
+    def imageDetection(self, msg):
+        """Callback function for processing incoming images."""
 
-            # Get frame
-            frameReadSuccess , frame = cap.read()
-            if(frameReadSuccess): #check if the frame read was a success
-                # Flip horizontally
-                frame = cv.flip(frame, 1)
+        try:
+            frame = self.bridge.imgmsg_to_cv2(msg, encoding="bgr8")
+        except CvBridgeError as e:
+            self.get_logger().error(f"Error converting image: {e}")
+            return
 
-                # Convert BGR to HSV
-                hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+        # Flip frame horizontally
+        frame = cv.flip(frame, 1)
 
-                # Define range of blue color in HSV
-                lower_color = np.array([0, 150, 150])
-                upper_color = np.array([30, 255, 255])
+        # Convert BGR to HSV
+        hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
 
-                # Threshold the HSV image to get only blue colors
-                mask = cv.inRange(hsv, lower_color, upper_color)
+        # Define range of blue color in HSV
+        lower_color = np.array([0, 150, 150])
+        upper_color = np.array([30, 255, 255])
 
-                kernel = np.ones((15, 15), np.uint8)
-                mask_smoothed = cv.morphologyEx(mask, cv.MORPH_CLOSE, kernel)
+        # Threshold the HSV image to get only blue colors
+        mask = cv.inRange(hsv, lower_color, upper_color)
 
-                # Look for any contours
-                contours, _ = cv.findContours(mask_smoothed, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+        kernel = np.ones((15, 15), np.uint8)
+        mask_smoothed = cv.morphologyEx(mask, cv.MORPH_CLOSE, kernel)
 
-                # if any contours:
-                if len(contours) > 0:
-                    # cnt = contours[0]  
-                    # Get Largest Contour
-                    largest_contour = max(contours, key=cv.contourArea)
+        # Look for any contours
+        contours, _ = cv.findContours(mask_smoothed, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
 
-                    # Get a bounding rectangle
-                    x, y, w, h = cv.boundingRect(largest_contour)
-                    # Draw the rectangle in green
-                    cv.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        # If any contours:
+        if contours:
+            # Get largest contour
+            largest_contour = max(contours, key=cv.contourArea)
 
+            # Get a bounding rectangle
+            x, y, w, h = cv.boundingRect(largest_contour)
+            
+            # Fit line to the largest contour
+            [vx, vy, x, y] = cv.fitLine(largest_contour, cv.DIST_L2, 0, 0.01, 0.01)
 
-                    # rect = cv.minAreaRect(largest_contour)
-                    # box = cv.boxPoints(rect)
-                    # box = np.int0(box)
-                    # cv.drawContours(frame, [box], 0, (0, 0, 255), 2)
+            # Calculate the angle
+            angle = np.arctan2(vy, vx) * 180 / np.pi # Convert to degrees
 
-                    # Get a closer polygon to match multi-segments
-                    epsilon = 0.02*cv.arcLength(largest_contour,True)
-                    approx = cv.approxPolyDP(largest_contour,epsilon,True)
-                    # Draw the polygon in red
-                    cv.drawContours(frame, [approx], -1, (255, 0, 0), 2)
-
-                    # Get bounds for calculating line
-                    camera_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH)) * 20
-                    camera_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-
-                    # * Honestly I forget 
-                    rows,cols = frame.shape[:2]
-                    # Get a fit line for the largest contour
-                    # This is a generic line, does not check for segments
-                    [vx,vy,x,y] = cv.fitLine(largest_contour, cv.DIST_L2,0,0.01,0.01)
-                    # * Print line coords to ensure sanity
-                    print(f"y is {y}, x is {x}, vy is {vy}, vx is {vx}")
-
-                    # Get the slope
-                    m = vy/vx
-                    # Make sure slope isn't too extreme
-                    #   ! Without this there are crashes from extreme slopes
-                    m = min(max(m, -25), 25)
-
-
-                    #get the angle and convert to a ros2 compatible message
-                    angle = calculate_angle(vx, vy)
-                    msg = Float64()
-                    msg.data = angle
-                    self.publisher_.publish(msg)
-
-
-                    # # Calculate left and right end points of line
-                    # lefty = int((-x*m) + y)
-                    # righty = int(((cols-x)*m)+y)
-
-                    # # Ensure lefty & righty are ints
-                    # #   Should not be needed
-                    # lefty = lefty if isinstance(lefty, int) else 1
-                    # righty = righty if isinstance(righty, int) else 1
-
-                    # # Ensure sides are within normal bounds
-                    # lefty = max(lefty, -camera_width)
-                    # lefty = min(lefty, camera_width)
-                    # righty = max(righty, -camera_width)
-                    # righty = min(righty, camera_width)
-
-                    # # * I do not know again
-                    # colMin1 = cols-1 or 0
-                    # colMin1 = colMin1 if isinstance(colMin1, int) else 1
-
-                    # print()
-
-                    # Actually draw the line
-                    # cv.line(frame,(colMin1,righty),(0,lefty),(0,255,0),2)
-
-                    # return ((colMin1, righty), (0, lefty))
-
-                # Show the edits
-                # cv.imshow('Contours', frame)
-                # cv.imshow('Mask', mask)
-                # cv.imshow('Smoothed', mask_smoothed)
-
-            # Exit
-            # cv.destroyAllWindows()
-            cap.release()
+            # Publish the angle
+            msg = Float64()
+            msg.data = angle
+            self.publisher_.publish(msg)
 
 
 def main(args = None):
-#	print("HELLO ROS2 FROM image-detection-script")
     rclpy.init(args=args)
     node = imageDetectionPkg()
     rclpy.spin(node)

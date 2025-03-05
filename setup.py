@@ -22,7 +22,7 @@ setup(
     entry_points={
         'console_scripts': [
 		'line_detector = image_recognition.image_detection_script:main',
-		# 'line_detector = image_recognition.happy:main',
+		'image_publisher = image_recognition.image_publisher:main',
         ],
     },
 )
