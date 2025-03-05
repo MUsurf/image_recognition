@@ -36,8 +36,8 @@ class imageDetectionPkg(Node):
         """Callback function for processing incoming images."""
 
         try:
-            frame = self.bridge.imgmsg_to_cv2(msg, encoding="bgr8")
-        except CvBridgeError as e:
+            frame = self.bridge.imgmsg_to_cv2(msg)
+        except Exception as e:
             self.get_logger().error(f"Error converting image: {e}")
             return
 
@@ -73,6 +73,9 @@ class imageDetectionPkg(Node):
 
             # Calculate the angle
             angle = np.arctan2(vy, vx) * 180 / np.pi # Convert to degrees
+
+            # Convert it from numpy array
+            angle = float(angle)
 
             # Publish the angle
             msg = Float64()

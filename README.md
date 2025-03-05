@@ -12,8 +12,18 @@ apt install python3-opencv
 apt install ros-${ROS_DISTRO}-cv-bridge
 source /opt/ros/$ROS_DISTRO/setup.bash
 source /home/ros2_ws/install/local_setup.bash
-colcon build --packages-select image_recognition
+colcon build --packages-select image_recognition --symlink-install
 source install/setup.bash
 ros2 run image_recognition line_detector
+```
+
+```sh
 ros2 run image_recognition image_publisher
+```
+
+```sh
+# Source Only
+source /opt/ros/$ROS_DISTRO/setup.bash
+source /home/ros2_ws/install/local_setup.bash
+source install/setup.bash
 ```
