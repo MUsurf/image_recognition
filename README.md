@@ -7,12 +7,15 @@ Doesn't build with image-detection-script.py so missing something
 Should be pasted into a folder: `src/image_recognition` in the ros2_ws to treat as package
 
 ```sh
+cd /home/ros2_ws/src
+git clone https://github.com/MUsurf/ImageRecognition/ --branch packageAttempt
+mv ImageRecognition/ image_recognition
 apt update
 apt install python3-opencv
-apt install ros-${ROS_DISTRO}-cv-bridge
-source /opt/ros/$ROS_DISTRO/setup.bash
+apt install ros-${ROS_DISTRO}-cv-bridge # Add to docker on build 
+source /opt/ros/$ROS_DISTRO/setup.bash # Add to docker on build
 source /home/ros2_ws/install/local_setup.bash
-colcon build --packages-select image_recognition --symlink-install
+colcon build --packages-select image_recognition --symlink-install # Symlink is to avoid future caching issues
 source install/setup.bash
 ros2 run image_recognition line_detector
 ```
