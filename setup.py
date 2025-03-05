@@ -1,4 +1,5 @@
 from setuptools import find_packages, setup
+from glob import glob
 
 package_name = 'image_recognition'
 
@@ -11,6 +12,9 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        # # Include images directory in live shared package
+        # ('share/' + package_name, ['test_images/mask.png']),
+        ('share/' + package_name, glob('test_images/*.png')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
