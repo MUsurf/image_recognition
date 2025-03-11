@@ -5,6 +5,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float64
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
+from image_recognition.msg import ThreePairCoords
 
 # Script to get a direction from a orange oblong
 # Uses opencv to process the image and get a "direction"
@@ -21,7 +22,7 @@ class imageDetectionPkg(Node):
         super().__init__('image_detection_node')
 
         # Create a publisher for the detected angle
-        self.publisher_= self.create_publisher(Float64, 'angle', 10)
+        self.publisher_= self.create_publisher(ThreePairCoords, 'positions', 10)
 
         # Create a subscriber to the image topic
         self.subscription = self.create_subscription(
@@ -62,25 +63,74 @@ class imageDetectionPkg(Node):
 
         # If any contours:
         if contours:
-            # Get largest contour
+        # Get the largest contour found as this is likely the wanted shape
             largest_contour = max(contours, key=cv.contourArea)
-
-            # Get a bounding rectangle
-            x, y, w, h = cv.boundingRect(largest_contour)
             
-            # Fit line to the largest contour
-            [vx, vy, x, y] = cv.fitLine(largest_contour, cv.DIST_L2, 0, 0.01, 0.01)
+            try:
+                # Get the convex hull of a point set to detect angle point
+                hull = cv.convexHull(largest_contour,returnPoints = False)
+                # Get all the examples of convexity
+                defects = cv.convexityDefects(largest_contour,hull)
+                
+                # We want to keep the furthest point so track params
+                maxDefect = [0,0,0,0]
+                
+                # If there are defects
+                if(defects is not None):
+                    # For all defects (convex points)
+                    for i in range(defects.shape[0]):
+                        # Get relevant points [start, end, far, distance]
+                        # start: index (of start of line of convexity),
+                        # end: index (of end of line with convexity),
+                        # far: convex point,
+                        # distance: distance of far from line of convexity
+                        test = defects[i,0]
 
-            # Calculate the angle
-            angle = np.arctan2(vy, vx) * 180 / np.pi # Convert to degrees
+                        # If distance is greater than current max
+                        if(test[3] > maxDefect[3]):
+                            ## far = tuple(largest_contour[test[2]][0])
+                            # Update max to new largest
+                            maxDefect = test 
+                    
+                    
+                    # Get the relevant points for the start, end, and far point
+                    start = tuple(largest_contour[maxDefect[0]][0])
+                    end = tuple(largest_contour[maxDefect[1]][0])
+                    far = tuple(largest_contour[maxDefect[2]][0])
+                    
+                    # Publish the points
+                    msg = ThreePairCoords()
+                    msg.endPoint1[0] = start[0]
+                    msg.endPoint1[1] = start[1]
+                    msg.endPoint2[0] = end[0]
+                    msg.endPoint2[1] = end[1]
+                    msg.midPoint[0] = far[0]
+                    msg.midPoint[1] = far[1]
+                    self.publisher_.publish(msg)
 
-            # Convert it from numpy array
-            angle = float(angle)
+            # If error from opencv then skip this frame
+            except cv.error:
+                self.get_logger().error("Error processing contours")
+                return
 
-            # Publish the angle
-            msg = Float64()
-            msg.data = angle
-            self.publisher_.publish(msg)
+            #### OLD CODE ####
+
+            # # Get a bounding rectangle
+            # x, y, w, h = cv.boundingRect(largest_contour)
+            
+            # # Fit line to the largest contour
+            # [vx, vy, x, y] = cv.fitLine(largest_contour, cv.DIST_L2, 0, 0.01, 0.01)
+
+            # # Calculate the angle
+            # angle = np.arctan2(vy, vx) * 180 / np.pi # Convert to degrees
+
+            # # Convert it from numpy array
+            # angle = float(angle)
+
+            # # Publish the angle
+            # msg = Float64()
+            # msg.data = angle
+            # self.publisher_.publish(msg)
 
 
 def main(args = None):
