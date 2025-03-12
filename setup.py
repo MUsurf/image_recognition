@@ -16,7 +16,6 @@ setup(
         # # Include images directory in live shared package
         # ('share/' + package_name, ['test_images/mask.png']),
         ('share/' + package_name, glob('test_images/*.png')),
-        (os.path.join('share', package_name, 'msg'), glob('msg/*.msg')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

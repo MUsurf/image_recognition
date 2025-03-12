@@ -5,16 +5,18 @@ from rclpy.node import Node
 from std_msgs.msg import Float64
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
-from image_recognition.msg import ThreePairCoords
+from geometry_msgs.msg import Pose, PoseArray
+
+# Constants
+POSE_ARRAY_PUBLISHER = 'positions'
+IMAGE_SUBSCRIPTION = 'image_topic'
+LOWER_COLOR = np.array([0, 150, 150])
+UPPER_COLOR = np.array([30, 255, 255])
+MORPH_KERNEL = np.ones((15, 15), np.uint8)
 
 # Script to get a direction from a orange oblong
 # Uses opencv to process the image and get a "direction"
 # Currently only supports a single direction averaging the oblong
-
-# TODO: Support multi segment oblong.
-
-# Get capture from camera
-cap = cv.VideoCapture(0)
 
 # Set up node stuff
 class imageDetectionPkg(Node): 
@@ -22,11 +24,11 @@ class imageDetectionPkg(Node):
         super().__init__('image_detection_node')
 
         # Create a publisher for the detected angle
-        self.publisher_= self.create_publisher(ThreePairCoords, 'positions', 10)
+        self.publisher_= self.create_publisher(PoseArray, POSE_ARRAY_PUBLISHER, 10)
 
         # Create a subscriber to the image topic
         self.subscription = self.create_subscription(
-            Image, 'image_topic', self.imageDetection, 10)
+            Image, IMAGE_SUBSCRIPTION, self.imageDetection, 10)
 
         # Initialize CvBridge for image conversion
         self.bridge = CvBridge()
@@ -48,14 +50,14 @@ class imageDetectionPkg(Node):
         # Convert BGR to HSV
         hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
 
-        # Define range of blue color in HSV
-        lower_color = np.array([0, 150, 150])
-        upper_color = np.array([30, 255, 255])
+        # Define range of orange color in HSV
+        lower_color = LOWER_COLOR
+        upper_color = UPPER_COLOR
 
-        # Threshold the HSV image to get only blue colors
+        # Threshold the HSV image to get only orange colors
         mask = cv.inRange(hsv, lower_color, upper_color)
 
-        kernel = np.ones((15, 15), np.uint8)
+        kernel = MORPH_KERNEL
         mask_smoothed = cv.morphologyEx(mask, cv.MORPH_CLOSE, kernel)
 
         # Look for any contours
@@ -96,41 +98,41 @@ class imageDetectionPkg(Node):
                     # Get the relevant points for the start, end, and far point
                     start = tuple(largest_contour[maxDefect[0]][0])
                     end = tuple(largest_contour[maxDefect[1]][0])
-                    far = tuple(largest_contour[maxDefect[2]][0])
+                    mid = tuple(largest_contour[maxDefect[2]][0])
+                
                     
                     # Publish the points
-                    msg = ThreePairCoords()
-                    msg.endPoint1[0] = start[0]
-                    msg.endPoint1[1] = start[1]
-                    msg.endPoint2[0] = end[0]
-                    msg.endPoint2[1] = end[1]
-                    msg.midPoint[0] = far[0]
-                    msg.midPoint[1] = far[1]
+                    # Use a PoseArray which allows multiple poses
+                    msg = PoseArray()
+                    msg.header.stamp = self.get_clock().now().to_msg()
+
+                    # Each pose will be used as an x,y 2D point
+                    start_pose = Pose()
+                    mid_pose = Pose()
+                    end_pose = Pose()
+
+                    # Set the positions of the 3 poses
+                    start_pose.position.x = float(start[0])
+                    start_pose.position.y = float(start[1])
+                    start_pose.position.z = 0.0
+                    mid_pose.position.x = float(mid[0])
+                    mid_pose.position.y = float(mid[1])
+                    mid_pose.position.z = 0.0
+                    end_pose.position.x = float(end[0])
+                    end_pose.position.y = float(end[1])
+                    end_pose.position.z = 0.0
+
+                    # Add the poses to the message
+                    msg.poses = [start_pose, mid_pose, end_pose]
                     self.publisher_.publish(msg)
+
+
+                    self.get_logger().info(f"Published positions: {start}, {mid}, {end}")
 
             # If error from opencv then skip this frame
             except cv.error:
                 self.get_logger().error("Error processing contours")
                 return
-
-            #### OLD CODE ####
-
-            # # Get a bounding rectangle
-            # x, y, w, h = cv.boundingRect(largest_contour)
-            
-            # # Fit line to the largest contour
-            # [vx, vy, x, y] = cv.fitLine(largest_contour, cv.DIST_L2, 0, 0.01, 0.01)
-
-            # # Calculate the angle
-            # angle = np.arctan2(vy, vx) * 180 / np.pi # Convert to degrees
-
-            # # Convert it from numpy array
-            # angle = float(angle)
-
-            # # Publish the angle
-            # msg = Float64()
-            # msg.data = angle
-            # self.publisher_.publish(msg)
 
 
 def main(args = None):
