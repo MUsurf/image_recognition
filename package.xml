@@ -7,13 +7,8 @@
   <maintainer email="root@todo.todo">root</maintainer>
   <license>Apache-2.0</license>
 
-  <depend>geometry_msgs</depend>
-  <depend>rclpy</depend>
-  <depend>sensor_msgs</depend>
+  <depend>python3-opencv</depend>
   <depend>cv_bridge</depend>
-  <depend>image_transport</depend>
-  <depend>cv2</depend>
-  <depend>numpy</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
